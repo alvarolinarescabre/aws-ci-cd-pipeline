@@ -129,6 +129,7 @@ Resources:
 
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: TargetGroupGreen
     Properties:
       LoadBalancerArn: !Ref ALB
       Port: 80
