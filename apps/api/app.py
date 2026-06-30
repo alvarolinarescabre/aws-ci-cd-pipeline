@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
+import os
+import time
 from flask import Flask, jsonify
 
 app = Flask(__name__)
+START_TIME = time.time()
+
 
 @app.route('/', methods=['GET'])
-def health():
-    """Endpoint de salud"""
+def index():
     return jsonify({
-        'status': 'healthy',
-        'message': 'App esta funcionando correctamente en ECS'
+        'message': 'App funcionando correctamente en ECS'
     })
+
 
 @app.route('/api/version', methods=['GET'])
 def version():
-    """Endpoint de versión"""
     return jsonify({
-        'version': '1.0.0',
-        'environment': 'production'
+        'version': os.getenv('APP_VERSION', '1.0.0'),
+        'environment': os.getenv('APP_ENV', 'production')
     })
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80, debug=False)

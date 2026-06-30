@@ -142,6 +142,7 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Sub "${EnvironmentName}-api"
+      EmptyOnDelete: true
       ImageScanningConfiguration:
         ScanOnPush: true
 
@@ -190,7 +191,7 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - curl -fs http://localhost/ || exit 1
+              - curl -fs http://localhost/health || exit 1
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -204,13 +205,15 @@ Resources:
 
   ECSService:
     Type: AWS::ECS::Service
-    DependsOn: Listener
+    DependsOn:
+      - Listener
+      - TaskDefinition
     Properties:
       ServiceName: !Sub "${EnvironmentName}-service"
       Cluster: !Ref ECSCluster
       LaunchType: FARGATE
       DesiredCount: 1
-      TaskDefinition: !Ref TaskDefinition
+      TaskDefinition: !Sub "${EnvironmentName}-task"
       HealthCheckGracePeriodSeconds: 60
       DeploymentController:
         Type: CODE_DEPLOY
