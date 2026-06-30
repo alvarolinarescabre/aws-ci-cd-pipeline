@@ -8,14 +8,14 @@ def health():
     """Endpoint de salud"""
     return jsonify({
         'status': 'healthy',
-        'message': 'App está funcionando correctamente en ECS'
+        'message': 'App esta funcionando correctamente en ECS'
     })
 
 @app.route('/api/version', methods=['GET'])
 def version():
     """Endpoint de versión"""
     return jsonify({
-        'version': '1.3.0',
+        'version': '1.0.0',
         'environment': 'production'
     })
 

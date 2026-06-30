@@ -293,21 +293,33 @@ aws ecr describe-images \
   --output table
 ```
 
-### Paso 5: Obtener nombres de recursos ECS del stack base
+### Paso 5: Obtener outputs del stack base para el pipeline
 ```bash
 # Necesarios como parámetros para el pipeline
-export ECS_CLUSTER=$(aws cloudformation describe-stacks \
+export TASK_DEF_FAMILY=$(aws cloudformation describe-stacks \
   --stack-name $STACK_NAME \
-  --query "Stacks[0].Outputs[?OutputKey=='ClusterName'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='TaskDefinitionFamily'].OutputValue" \
   --output text)
 
-export ECS_SERVICE=$(aws cloudformation describe-stacks \
+export CODEDEPLOY_APP=$(aws cloudformation describe-stacks \
   --stack-name $STACK_NAME \
-  --query "Stacks[0].Outputs[?OutputKey=='ServiceName'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='CodeDeployAppName'].OutputValue" \
   --output text)
 
-echo "Cluster: $ECS_CLUSTER"
-echo "Servicio: $ECS_SERVICE"
+export CODEDEPLOY_GROUP=$(aws cloudformation describe-stacks \
+  --stack-name $STACK_NAME \
+  --query "Stacks[0].Outputs[?OutputKey=='CodeDeployDeploymentGroupName'].OutputValue" \
+  --output text)
+
+export EXECUTION_ROLE_ARN=$(aws cloudformation describe-stacks \
+  --stack-name $STACK_NAME \
+  --query "Stacks[0].Outputs[?OutputKey=='ExecutionRoleArn'].OutputValue" \
+  --output text)
+
+echo "Task Definition Family: $TASK_DEF_FAMILY"
+echo "CodeDeploy App: $CODEDEPLOY_APP"
+echo "CodeDeploy Group: $CODEDEPLOY_GROUP"
+echo "Execution Role ARN: $EXECUTION_ROLE_ARN"
 ```
 
 ### Paso 6: Desplegar pipeline de CI/CD (CodePipeline + CodeBuild)
@@ -321,11 +333,13 @@ aws cloudformation deploy \
     GitHubOwner=$GITHUB_OWNER \
     GitHubRepo=$GITHUB_REPO \
     GitHubBranch=$GITHUB_BRANCH \
-    GitHubTokenSecret=github-token \
+    GitHubOAuthTokenSecretName=github-token \
     ECRRepositoryName=$IMAGE_REPO_NAME \
-    ECSClusterName=$ECS_CLUSTER \
-    ECSServiceName=$ECS_SERVICE \
-    ContainerName=api-container
+    ContainerName=api-container \
+    TaskDefinitionFamily=$TASK_DEF_FAMILY \
+    CodeDeployAppName=$CODEDEPLOY_APP \
+    CodeDeployDeploymentGroupName=$CODEDEPLOY_GROUP \
+    ExecutionRoleArn=$EXECUTION_ROLE_ARN
 
 # Verificar que el pipeline se creó correctamente
 aws cloudformation describe-stacks \

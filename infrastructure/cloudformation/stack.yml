@@ -158,10 +158,10 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName}-alb
 
-  ALBTargetGroup:
+  ALBTargetGroupBlue:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub ${EnvironmentName}-tg
+      Name: !Sub ${EnvironmentName}-tg-blue
       Port: !Ref ContainerPort
       Protocol: HTTP
       TargetType: ip
@@ -173,7 +173,24 @@ Resources:
       UnhealthyThresholdCount: 3
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-tg
+          Value: !Sub ${EnvironmentName}-tg-blue
+
+  ALBTargetGroupGreen:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${EnvironmentName}-tg-green
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref VPC
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-tg-green
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -183,7 +200,7 @@ Resources:
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
+          TargetGroupArn: !Ref ALBTargetGroupBlue
 
   ECRRepository:
     Type: AWS::ECR::Repository
@@ -255,10 +272,12 @@ Resources:
       TaskDefinition: !Ref TaskDefinition
       ServiceName: !Sub ${EnvironmentName}-service
       HealthCheckGracePeriodSeconds: 60
+      DeploymentController:
+        Type: CODE_DEPLOY
       LoadBalancers:
         - ContainerName: !Ref ContainerName
           ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !Ref ALBTargetGroup
+          TargetGroupArn: !Ref ALBTargetGroupBlue
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
@@ -268,6 +287,58 @@ Resources:
             - !Ref PublicSubnetOne
             - !Ref PublicSubnetTwo
 
+  CodeDeployServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-codedeploy-role
+
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Sub ${EnvironmentName}-app
+      ComputePlatform: ECS
+
+  CodeDeployDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    DependsOn: ECSService
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub ${EnvironmentName}-deploy-group
+      ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
+      DeploymentConfigName: CodeDeployDefault.ECSAllAtOnce
+      DeploymentStyle:
+        DeploymentType: BLUE_GREEN
+        DeploymentOption: WITH_TRAFFIC_CONTROL
+      BlueGreenDeploymentConfiguration:
+        DeploymentReadyOption:
+          ActionOnTimeout: CONTINUE_DEPLOYMENT
+          WaitTimeInMinutes: 0
+        TerminateBlueInstancesOnDeploymentSuccess:
+          Action: TERMINATE
+          TerminationWaitTimeInMinutes: 5
+      LoadBalancerInfo:
+        TargetGroupPairInfoList:
+          - TargetGroups:
+              - Name: !GetAtt ALBTargetGroupBlue.TargetGroupName
+              - Name: !GetAtt ALBTargetGroupGreen.TargetGroupName
+            ProdTrafficRoute:
+              ListenerArns:
+                - !Ref ALBListener
+      ECSServices:
+        - ClusterName: !Ref ECSCluster
+          ServiceName: !Sub ${EnvironmentName}-service
+
 Outputs:
   ClusterName:
     Description: Nombre del cluster ECS
@@ -276,8 +347,8 @@ Outputs:
     Description: Nombre del servicio ECS
     Value: !Ref ECSService
   TaskDefinitionFamily:
-    Description: Familia de la definición de tarea
-    Value: !Ref TaskDefinition
+    Description: Familia de la definición de tarea ECS
+    Value: !Sub ${EnvironmentName}-${AppName}
   RepositoryUri:
     Description: URI del repositorio ECR creado
     Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}
@@ -287,3 +358,12 @@ Outputs:
   ALBDnsName:
     Description: URL pública del Application Load Balancer
     Value: !Sub http://${ALB.DNSName}
+  CodeDeployAppName:
+    Description: Nombre de la aplicación CodeDeploy
+    Value: !Ref CodeDeployApplication
+  CodeDeployDeploymentGroupName:
+    Description: Nombre del deployment group CodeDeploy
+    Value: !Sub ${EnvironmentName}-deploy-group
+  ExecutionRoleArn:
+    Description: ARN del rol de ejecución ECS
+    Value: !GetAtt ExecutionRole.Arn
