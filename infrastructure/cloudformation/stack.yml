@@ -187,6 +187,14 @@ Resources:
           PortMappings:
             - ContainerPort: 80
               Protocol: tcp
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -fs http://localhost/ || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
           LogConfiguration:
             LogDriver: awslogs
             Options:
