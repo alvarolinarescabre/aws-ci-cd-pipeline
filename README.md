@@ -379,7 +379,7 @@ aws codepipeline get-pipeline-state \
   --output table
 
 # 5. Ver logs de CodeBuild si hay errores
-aws logs tail /aws/codebuild/$PIPELINE_NAME --follow
+aws logs tail /aws/codebuild/$PIPELINE_STACK_NAME-build --follow
 ```
 
 ---
